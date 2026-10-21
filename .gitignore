@@ -1,0 +1,17 @@
+# Downloaded at runtime on the user's machine - never commit
+portraits/
+cache/
+
+# Personal settings, including the Stratz token - NEVER commit
+config.json
+
+# Local diagnostics (contain screenshots with player names)
+preview.jpg
+snapshot.png
+snapshot.txt
+
+# Secrets and Python noise
+.env
+*.pyc
+__pycache__/
+.venv/
