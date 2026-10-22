@@ -50,8 +50,10 @@ from pathlib import Path
 
 import requests
 
+import paths
+
 URL = "https://api.stratz.com/graphql"
-DATA_DIR = Path(__file__).resolve().parent      # everything lives next to the program
+DATA_DIR = paths.data_dir()      # see paths.py for where this is
 CACHE = DATA_DIR / "cache"
 CONFIG_FILE = DATA_DIR / "config.json"
 K = 300      # shrinkage strength: a pair needs ~K games to count at half weight

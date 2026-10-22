@@ -26,7 +26,9 @@ import cv2
 import numpy as np
 import requests
 
-DATA_DIR = Path(__file__).resolve().parent      # everything lives next to the program
+import paths
+
+DATA_DIR = paths.data_dir()      # see paths.py for where this is
 PORTRAIT_DIR = DATA_DIR / "portraits"
 HEROES_JSON = PORTRAIT_DIR / "heroes.json"
 CDN = "https://cdn.cloudflare.steamstatic.com"

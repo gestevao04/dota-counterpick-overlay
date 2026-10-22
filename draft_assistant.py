@@ -54,6 +54,7 @@ import numpy as np
 
 import counter_score as cs
 import draft_reader as dr
+import paths
 
 
 SLOT_REF = (1920, 1080)  # resolution the SLOTS boxes were calibrated at
@@ -71,15 +72,18 @@ LEARN_INSET = 3    # pixels trimmed off a learned crop (drops box outlines)
 
 
 def use_slots_file():
-    """If slots.json exists, it replaces SLOTS in draft_reader.py and the
-    calibration size. Format: {"ref_size": [W, H], "slots": {"radiant_1": [x, y, w, h], ...}}"""
+    """If a slots.json exists, it replaces SLOTS in draft_reader.py and the
+    calibration size. A slots.json in the data folder wins (edit it to adjust
+    the boxes); otherwise the default shipped with the program is used.
+    Format: {"ref_size": [W, H], "slots": {"radiant_1": [x, y, w, h], ...}}"""
     global SLOT_REF
-    if not SLOTS_FILE.exists():
-        return False
-    data = json.loads(SLOTS_FILE.read_text())
-    dr.SLOTS = {k: tuple(v) for k, v in data["slots"].items()}
-    SLOT_REF = tuple(data["ref_size"])
-    return True
+    for candidate in (SLOTS_FILE, paths.resource_dir() / "slots.json"):
+        if candidate.exists():
+            data = json.loads(candidate.read_text())
+            dr.SLOTS = {k: tuple(v) for k, v in data["slots"].items()}
+            SLOT_REF = tuple(data["ref_size"])
+            return True
+    return False
 
 
 def slots_for(img):

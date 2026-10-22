@@ -33,6 +33,25 @@ tools can change, so use it at your own risk.
 
 ## Install
 
+### Option A: Windows download (no Python needed)
+
+1. Download `DotaDraftOverlay-vX.Y.Z-windows.zip` from the
+   [Releases](../../releases) page and extract it anywhere you can write files
+   (not `Program Files`). Everything the program saves stays in that folder.
+2. Run `DotaDraftOverlay.exe`.
+
+**Windows may warn you.** The program is not code-signed yet, so Windows
+SmartScreen can say "Windows protected your PC": click *More info*, then *Run
+anyway*. Some antivirus programs also flag unsigned programs that capture the
+screen and stay on top of other windows. You can check that your download is the
+one the project built: each release has a `.sha256` file, and
+`Get-FileHash DotaDraftOverlay-vX.Y.Z-windows.zip` in PowerShell should print the
+same value. The release is built from this repository by a public workflow (see
+[Building](#building-the-windows-program)), and if you would rather not run a
+download at all, Option B runs the same code from source.
+
+### Option B: run from source
+
 Requires Python 3.9+ (on Windows use the python.org installer, which includes
 tkinter) and Dota 2 in **borderless windowed** mode.
 
@@ -81,8 +100,17 @@ remembered between runs.
 | Weeks of meta | How many recent weeks count for the position filters and the first-pick table. The position data is stored week by week, so changing this needs **no** download. |
 | Update buttons | Download one dataset or all three. A failed download shows the reason in the log (bad token, no network, rate limit) and does not break the others. |
 
-Everything the program downloads or saves lives next to the program:
-`portraits/`, `cache/` and `config.json`. Delete them to reset.
+Everything the program downloads or saves lives in one folder: `portraits/`,
+`cache/` and `config.json`. That is the folder of the program itself, so the
+whole thing is portable. If that folder is not writable it uses
+`%APPDATA%\DotaDraftOverlay` instead, and the `DOTA_OVERLAY_HOME` environment
+variable can point it anywhere. Delete those items to reset. If the program ever
+crashes, the details are saved to `error.log` in the same folder; please attach
+it to your bug report.
+
+To use a different `--dev`, `--team` or other option with the Windows download,
+make a shortcut to `DotaDraftOverlay.exe` and add the option at the end of the
+shortcut's Target.
 
 ## Command line (optional)
 
@@ -165,9 +193,34 @@ This project is, and will stay, free and open source. If it helps your drafts
 and you would like to chip in, donations are very welcome and entirely
 voluntary. They don't unlock anything.
 
-- [GitHub Sponsors](https://github.com/sponsors/gestevao04)
-- [Ko-fi](https://ko-fi.com/gestevao04)
-- Pix (BR): `5c92a994-5074-4932-a2d5-e49d00cb5a47`
+- [GitHub Sponsors](https://github.com/sponsors/YOUR-USERNAME)
+- [Ko-fi](https://ko-fi.com/YOUR-NAME)
+- Pix: `YOUR-PIX-KEY`
+
+## Building the Windows program
+
+The release workflow (`.github/workflows/release.yml`) builds the Windows
+package with [PyInstaller](https://pyinstaller.org), runs the tests, checks that
+the built program starts and contains every library it needs (`--selftest`),
+and attaches a zip and its checksum to the GitHub release. To build locally:
+
+```
+pip install -r requirements.txt pyinstaller
+python -m PyInstaller dota-draft-overlay.spec --noconfirm
+```
+
+The result is in `dist/DotaDraftOverlay/`. Maintainers: see
+[RELEASING.md](RELEASING.md).
+
+## Running the tests
+
+```
+python -m unittest discover -s tests -t . -v
+```
+
+The tests use a throw-away data folder and a fake Stratz and tkinter, so they
+need no token, no network and no display, and they never touch your real
+settings.
 
 ## Contributing
 

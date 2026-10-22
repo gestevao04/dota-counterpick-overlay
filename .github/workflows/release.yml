@@ -1,0 +1,82 @@
+name: Release
+
+# Push a tag like v0.1.1 (it must match version.py) to build the Windows
+# package and attach it to the GitHub release for that tag. You can also run it
+# by hand from the Actions tab to get the build as a downloadable artifact.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write          # needed to attach files to the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Read the version
+        id: version
+        shell: bash
+        run: echo "number=$(python -c 'import version; print(version.__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Tag must match version.py
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.version.outputs.number }}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version.py (${{ steps.version.outputs.number }})."
+            echo "Bump version.py, commit, and tag again."
+            exit 1
+          fi
+
+      - run: pip install -r requirements.txt pyinstaller
+
+      - name: Run the tests
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Build
+        run: python -m PyInstaller dota-draft-overlay.spec --noconfirm
+
+      - name: Self-test the built program
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist/DotaDraftOverlay/DotaDraftOverlay.exe" -ArgumentList "--selftest" -Wait -PassThru
+          Get-Content "dist/DotaDraftOverlay/selftest.txt"
+          if ($p.ExitCode -ne 0) { throw "selftest failed (exit code $($p.ExitCode))" }
+          Remove-Item "dist/DotaDraftOverlay/selftest.txt"
+
+      - name: Zip and checksum
+        shell: pwsh
+        run: |
+          $name = "DotaDraftOverlay-v${{ steps.version.outputs.number }}-windows"
+          Compress-Archive -Path "dist/DotaDraftOverlay" -DestinationPath "$name.zip"
+          $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
+          "ZIP_NAME=$name.zip" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DotaDraftOverlay-windows
+          path: |
+            DotaDraftOverlay-*.zip
+            DotaDraftOverlay-*.zip.sha256
+
+      - name: Attach to the GitHub release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --prerelease
+          gh release upload "$GITHUB_REF_NAME" DotaDraftOverlay-*.zip DotaDraftOverlay-*.zip.sha256 --clobber

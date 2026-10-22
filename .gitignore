@@ -15,3 +15,9 @@ snapshot.txt
 *.pyc
 __pycache__/
 .venv/
+
+# Packaging output and runtime logs
+build/
+dist/
+error.log
+selftest.txt

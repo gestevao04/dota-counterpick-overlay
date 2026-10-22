@@ -60,6 +60,7 @@ import counter_score as cs
 import draft_assistant as da
 import draft_reader as dr
 import updater
+from version import __version__
 
 BG, FG, DIM = "#10141c", "#e8e8e8", "#7f8c8d"
 GOOD, BAD, WARN = "#58d68d", "#ec7063", "#e5a50a"
@@ -147,7 +148,7 @@ class SettingsWindow:
         cfg = cs.load_config()
 
         win = self.win = tk.Toplevel(overlay.root)
-        win.title("Dota Draft Overlay - Settings")
+        win.title(f"Dota Draft Overlay v{__version__} - Settings")
         win.attributes("-topmost", True)
         win.resizable(False, False)
         win.protocol("WM_DELETE_WINDOW", self.close)
@@ -613,6 +614,7 @@ class Overlay:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    p.add_argument("--version", action="version", version=f"Dota Draft Overlay {__version__}")
     p.add_argument("--position", type=int, choices=range(1, 6))
     p.add_argument("--meta", action="store_true")
     p.add_argument("--team", choices=["radiant", "dire"], default=None)
