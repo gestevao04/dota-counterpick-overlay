@@ -38,7 +38,10 @@ tools can change, so use it at your own risk.
 1. Download `DotaDraftOverlay-vX.Y.Z-windows.zip` from the
    [Releases](../../releases) page and extract it anywhere you can write files
    (not `Program Files`). Everything the program saves stays in that folder.
-2. Run `DotaDraftOverlay.exe`.
+2. Run `DotaDraftOverlay.exe` **from inside that folder**. It needs the
+   `_internal` folder next to it, so do not move or copy the `.exe` on its own.
+   For a desktop shortcut, right-click the `.exe` and choose *Send to*, then
+   *Desktop (create shortcut)*.
 
 **Windows may warn you.** The program is not code-signed yet, so Windows
 SmartScreen can say "Windows protected your PC": click *More info*, then *Run
@@ -144,6 +147,12 @@ Automatic detection of the boxes would be a great contribution.
 
 ## Troubleshooting
 
+- **"Failed to load Python DLL ... python312.dll" when starting the Windows
+  program.** The `.exe` was separated from its `_internal` folder (usually by
+  moving or copying just the `.exe`, or running it from inside the zip). Extract
+  the whole zip and run the `.exe` from within the extracted folder. If
+  `_internal` is there and the error remains, your antivirus may have
+  quarantined `python312.dll`; restore it and add the folder as an exception.
 - **Overlay disappears when you click Dota.** The overlay re-asserts "always on
   top" several times a second, but it cannot draw over true exclusive
   fullscreen. Set Dota's display mode to borderless windowed.
