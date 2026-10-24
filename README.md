@@ -6,6 +6,8 @@ using current win-rate data for the Legend/Ancient bracket. If you are first
 pick and nothing is on screen yet, it shows the current meta win rates for
 your position instead.
 
+**[Download for Windows](../../releases)**: open the newest release and get the file ending in `-windows.zip` (details [below](#option-a-windows-download-no-python-needed)).
+
 > **Not affiliated with or endorsed by Valve.** Dota 2 and its hero names and
 > artwork belong to Valve Corporation. See [Legal](#legal-and-credits).
 
@@ -35,10 +37,17 @@ tools can change, so use it at your own risk.
 
 ### Option A: Windows download (no Python needed)
 
-1. Download `DotaDraftOverlay-vX.Y.Z-windows.zip` from the
-   [Releases](../../releases) page and extract it anywhere you can write files
-   (not `Program Files`). Everything the program saves stays in that folder.
-2. Run `DotaDraftOverlay.exe` **from inside that folder**. It needs the
+1. Open the [Releases page](../../releases). On the repository's main page it is
+   the **Releases** link on the right-hand side. Click the newest version at the
+   top.
+2. Scroll down to **Assets** (click *Show all assets* if the list is collapsed)
+   and download the file whose name ends in **`-windows.zip`**. Ignore the
+   *Source code* files: those are for developers, and the program will not run
+   from them. The `.sha256` file is only for verifying the download (see below).
+3. Right-click the zip, choose **Extract All**, and open the folder it creates.
+   Extract it somewhere you can write files (not `Program Files`). Everything the
+   program saves stays in that folder.
+4. Double-click `DotaDraftOverlay.exe` **inside that folder**. It needs the
    `_internal` folder next to it, so do not move or copy the `.exe` on its own.
    For a desktop shortcut, right-click the `.exe` and choose *Send to*, then
    *Desktop (create shortcut)*.
