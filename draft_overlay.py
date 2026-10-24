@@ -531,15 +531,21 @@ class Overlay:
 
     # ---- developer tools ------------------------------------------------
     def snap(self):
-        """Save what the script sees right now: preview.jpg, snapshot.png, snapshot.txt."""
+        """Save what the script sees right now (preview.jpg, snapshot.png,
+        snapshot.txt) in the program's data folder, wherever it was started from."""
         if self.last_img is None or self.templates is None:
             self.title.config(text="Nothing captured yet", fg=BAD)
             return
-        da.save_preview(self.last_img, "preview.jpg")
-        cv2.imwrite("snapshot.png", self.last_img)  # clean frame, for `learn`
-        Path("snapshot.txt").write_text(
-            "\n".join(da.debug_lines(self.last_img, self.templates, self.names)))
-        self.title.config(text="Saved preview.jpg, snapshot.png, snapshot.txt", fg=GOOD)
+        out = cs.DATA_DIR
+        try:
+            da.save_preview(self.last_img, str(out / "preview.jpg"))
+            cv2.imwrite(str(out / "snapshot.png"), self.last_img)  # clean frame, for `learn`
+            (out / "snapshot.txt").write_text(
+                "\n".join(da.debug_lines(self.last_img, self.templates, self.names)))
+        except OSError as exc:
+            self.title.config(text=f"Could not save: {exc}"[:48], fg=BAD)
+            return
+        self.title.config(text="Saved snapshot files in the program folder", fg=GOOD)
 
     # ---- staying above the game (Windows) -------------------------------
     def _hwnd(self, u):
@@ -586,7 +592,7 @@ class Overlay:
                 img = da.grab(a.monitor)
                 self.last_img = img
                 if a.preview:
-                    da.save_preview(img)
+                    da.save_preview(img, str(cs.DATA_DIR / "preview.jpg"))
                 if a.debug:
                     da.debug_report(img, self.templates, self.names)
                 picks = self.memory.update(da.read_draft(img, self.templates))

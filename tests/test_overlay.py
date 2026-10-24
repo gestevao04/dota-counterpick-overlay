@@ -37,6 +37,18 @@ class OverlayTests(unittest.TestCase):
         self.assertNotIn(("team", "snap"), o.buttons)
         self.assertIn(("team", "snap"), ov.Overlay(overlay_args(dev=True)).buttons)
 
+    def test_snap_saves_into_the_data_folder(self):
+        from tests.helpers import HOME
+
+        o = ov.Overlay(overlay_args(dev=True))
+        o.on_button("team", "snap")                                # nothing captured yet
+        self.assertIn("Nothing captured", text(o.title))
+        o.last_img = make_frame({"radiant_1": 1})
+        o.on_button("team", "snap")
+        for name in ("preview.jpg", "snapshot.png", "snapshot.txt"):
+            self.assertTrue((HOME / name).exists(), name)
+        self.assertIn("program folder", text(o.title))
+
     def test_footer_names_the_bracket_and_weeks(self):
         o = ov.Overlay(overlay_args())
         self.assertTrue(o.ready)

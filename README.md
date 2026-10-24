@@ -159,7 +159,8 @@ Automatic detection of the boxes would be a great contribution.
 - **Nothing is read / black capture.** Same cause, or wrong monitor
   (`--monitor N`).
 - **A slot is misread or missing.** Start the overlay with `--dev` to get a Snap
-  button. Click it while it happens and look at `snapshot.txt` (best guess,
+  button. Click it while it happens; it saves `preview.jpg`, `snapshot.png` and
+  `snapshot.txt` in the program's folder. Look at `snapshot.txt` (best guess,
   runner-up and margin per slot). If a hero looks different from its default
   portrait (cosmetic sets), teach the reader:
   `python draft_assistant.py learn snapshot.png radiant_4 "Tidehunter"`.
@@ -230,6 +231,15 @@ python -m unittest discover -s tests -t . -v
 The tests use a throw-away data folder and a fake Stratz and tkinter, so they
 need no token, no network and no display, and they never touch your real
 settings.
+
+## Reporting problems
+
+Please open an [issue](../../issues/new/choose) and pick the form that fits:
+**Bug report** (crashes, the window, downloads), **Hero misread or not detected**
+(the overlay shows the wrong hero or misses one), or **Feature request**. The
+forms ask for your program version, screen resolution and Dota's display mode,
+which are usually what is needed to reproduce a problem. Never include your
+Stratz token or `config.json`, and blur other players' names in screenshots.
 
 ## Contributing
 

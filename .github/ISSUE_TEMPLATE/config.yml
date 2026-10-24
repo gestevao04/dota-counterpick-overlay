@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/gestevao04/dota-counterpick-overlay#troubleshooting
+    about: Common problems (python312.dll error, overlay hidden behind the game, failed downloads) and their fixes.

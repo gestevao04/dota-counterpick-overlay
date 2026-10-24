@@ -1,0 +1,88 @@
+name: Bug report
+description: Something does not work (a crash, the window, a download, wrong suggestions)
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! These details are usually all that is needed to reproduce a problem.
+
+        **Never paste or attach your Stratz token or `config.json`** (it contains your token).
+        If you attach a screenshot, blur other players' names.
+
+        If the problem is that a hero in the draft is **misread or not detected**, please use the *Hero misread or not detected* form instead.
+  - type: input
+    id: version
+    attributes:
+      label: Program version
+      description: Shown in the title bar of the Settings window (click Settings in the overlay), for example v0.1.1.
+      placeholder: v0.1.1
+    validations:
+      required: true
+  - type: dropdown
+    id: how_run
+    attributes:
+      label: How do you run it?
+      options:
+        - Windows download (DotaDraftOverlay.exe)
+        - From source (python draft_overlay.py)
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+  - type: input
+    id: resolution
+    attributes:
+      label: Screen resolution and Windows display scaling
+      description: Right-click the desktop, then Display settings.
+      placeholder: 2560x1440, 100%
+    validations:
+      required: true
+  - type: dropdown
+    id: display_mode
+    attributes:
+      label: Dota 2 display mode
+      description: In Dota's video settings.
+      options:
+        - Borderless windowed
+        - Fullscreen (exclusive)
+        - Windowed
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you see, and what did you expect to see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings
+        2. Click "Update everything"
+        3. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error details
+      description: |
+        Paste the text from `error.log` (in the program's folder) if the program crashed, or the lines from the Settings log window if a download failed.
+        You can also drag files into this box. Remove anything that looks like a token.
+      render: text
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and the Troubleshooting section of the README.
+          required: true
+        - label: I did not include my Stratz token or config.json.
+          required: true

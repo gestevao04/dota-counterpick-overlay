@@ -1,0 +1,108 @@
+name: Hero misread or not detected
+description: The overlay shows the wrong hero, or misses a hero that is picked
+title: "[Misread] "
+labels: ["misread"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reading the draft from the screen is the most delicate part of the program, and reports like this are very valuable. The more detail the better.
+
+        **Never paste or attach your Stratz token or `config.json`.** Screenshots can show other players' names: blur them, or only attach the text file.
+  - type: input
+    id: version
+    attributes:
+      label: Program version
+      description: Shown in the title bar of the Settings window, for example v0.1.1.
+      placeholder: v0.1.1
+    validations:
+      required: true
+  - type: input
+    id: resolution
+    attributes:
+      label: Screen resolution and Windows display scaling
+      placeholder: 1920x1080, 100%
+    validations:
+      required: true
+  - type: dropdown
+    id: display_mode
+    attributes:
+      label: Dota 2 display mode
+      options:
+        - Borderless windowed
+        - Fullscreen (exclusive)
+        - Windowed
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: ui_scale
+    attributes:
+      label: Dota interface scale and client language
+      description: Only if you changed them from the defaults.
+      placeholder: Default scale, English
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Which screen was it?
+      options:
+        - Hero pick (draft)
+        - Strategy phase
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: slots
+    attributes:
+      label: Which slots were wrong or empty?
+      description: Radiant is the left side of the top bar, Dire the right, counted left to right.
+      multiple: true
+      options:
+        - radiant_1
+        - radiant_2
+        - radiant_3
+        - radiant_4
+        - radiant_5
+        - dire_1
+        - dire_2
+        - dire_3
+        - dire_4
+        - dire_5
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What is on screen, and what did the overlay show?
+      description: For example, "radiant_4 is Tidehunter, the overlay showed nothing for it (read 9/10)."
+    validations:
+      required: true
+  - type: dropdown
+    id: cosmetics
+    attributes:
+      label: Does the misread hero look different from its normal portrait (a cosmetic set)?
+      options:
+        - Not sure
+        - "Yes"
+        - "No"
+  - type: textarea
+    id: snapshot
+    attributes:
+      label: Snapshot files
+      description: |
+        The Snap button saves exactly what the program sees, which lets me reproduce the problem.
+
+        1. Start the program with `--dev`. From source: `python draft_overlay.py --dev`. Windows download: make a shortcut to DotaDraftOverlay.exe and add ` --dev` at the end of the shortcut's Target.
+        2. When the problem is on screen, click the new **Snap** button in the overlay.
+        3. Drag `snapshot.txt` and `preview.jpg` from the program's folder into this box (blur names in the image first).
+
+        `snapshot.png` (a full clean screenshot, which may show player names) is optional, but it is the file that lets me add support for the hero's look. Only attach it if you are comfortable sharing it.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before submitting
+      options:
+        - label: I did not include my Stratz token or config.json.
+          required: true
