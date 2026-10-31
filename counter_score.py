@@ -294,9 +294,9 @@ def rank(allies, enemies, pool=None):
 
 def suggest(allies, enemies, top, pool=None):
     names, rows = rank(allies, enemies, pool)
-    print(f"{'Hero':<22}{'Syn':>7}{'Mat':>7}{'Meta':>7}{'Total':>8}")
+    print(f"{'Hero':<22}{'Syn':>7}{'Mat':>7}{'Total':>8}")
     for total, syn, mat, meta, c in rows[:top]:
-        print(f"{names[c]:<22}{syn:>+7.1f}{mat:>+7.1f}{meta:>+7.1f}{total:>+8.1f}")
+        print(f"{names[c]:<22}{syn:>+7.1f}{mat:>+7.1f}{total:>+8.1f}")
 
 
 def resolve(text, names):
@@ -441,9 +441,7 @@ def first_pick(position, meta, top):
         sys.exit("Download the position data first: python counter_score.py fetch-meta")
     label = f"position {position}" + (" (meta only)" if meta else "") if position else "all positions"
     bracket = get_info().get("meta", {}).get("bracket", load_config()["bracket"])
-    mode = get_info().get("meta", {}).get("game_mode", "any")
-    print(f"First-pick meta, {label}, {bracket_label(bracket)}, "
-          f"mode={mode}, last {current_weeks()} week(s)")
+    print(f"First-pick meta, {label}, {bracket_label(bracket)}, last {current_weeks()} week(s)")
     print(f"{'Hero':<22}{'Win%':>7}{'Pick%':>8}{'Games':>9}")
     for h, win, pick, g in rows[:top]:
         print(f"{names[h]:<22}{win:>7.1f}{pick:>8.1f}{g:>9}")
@@ -511,7 +509,6 @@ def show_config():
     print(f"token  : {shown}  [{src}]")
     print(f"bracket: {cfg['bracket']} ({bracket_label(cfg['bracket'])})")
     print(f"weeks  : {current_weeks()}")
-    print(f"mode   : {GAME_MODE or 'any'}")
 
 
 def main():
