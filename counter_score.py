@@ -35,8 +35,9 @@ Commands:
 How the score works (all in percentage points of win rate):
   matchup(c, e)  = winrate(c vs e)   - baseline(c)
   synergy(c, a)  = winrate(c with a) - average(baseline(c), baseline(a))
+  meta(c)        = pick_rate_pct(c)  * META_LEVERAGE
   Each delta is shrunk toward 0 by  n / (n + K)  so small samples count less.
-  total = sum of synergies with allies + sum of matchups vs enemies.
+  total = sum of synergies with allies + sum of matchups vs enemies + meta
 """
 
 import argparse
@@ -65,10 +66,12 @@ SHRINK_K = 200      # first-pick table: games of prior pulling win rates toward 
 MIN_SHARE_ALL = 0.004  # first-pick table with no position: ignore heroes under 0.4% of picks
 MAX_WEEKS = 12
 
-# Restrict downloaded match data to ranked games. Stratz's lobbyType enum uses
-# the bare value RANKED. Set to None to disable the filter (e.g. if matchUp
-# rejects the argument on your schema) — winWeek and matchUp both read this.
-LOBBY = "RANKED"
+# Restrict downloaded meta data to standard ranked games. Stratz's winWeek
+# accepts gameModeIds, but matchUp does NOT. So we only filter fetch-meta.
+GAME_MODE = "ALL_PICK_RANKED"
+# How much to reward heroes with high pick rates from the ranked meta.
+# E.g., a hero with a 20% pick rate gets +10.0 points to their total score.
+META_LEVERAGE = 0.5
 
 # Individual rank names Stratz uses for winWeek; a bracket group is two of them
 # joined by "_" (LEGEND_ANCIENT -> LEGEND, ANCIENT).
@@ -188,15 +191,11 @@ def fetch(progress=print):
     (CACHE / "heroes.json").write_text(json.dumps(names))
     ids = sorted(names)
 
-    # Optional ", lobbyType: RANKED" fragment shared by every matchUp call.
-    lobby = f", lobbyType: {LOBBY}" if LOBBY else ""
-
     matrix = {}
     for i in range(0, len(ids), BATCH):
         chunk = ids[i : i + BATCH]
         body = "".join(
-            f"h{hid}: matchUp(heroId: {hid}, bracketBasicIds: {bracket}"
-            f"{lobby}, take: 200) "
+            f"h{hid}: matchUp(heroId: {hid}, bracketBasicIds: {bracket}, take: 200) "
             "{ heroId vs { heroId2 matchCount winCount } "
             "with { heroId2 matchCount winCount } } "
             for hid in chunk
@@ -214,9 +213,8 @@ def fetch(progress=print):
         progress(f"Matchups: {min(i + BATCH, len(ids))}/{len(ids)} heroes")
         time.sleep(1)
     (CACHE / "matchups.json").write_text(json.dumps(matrix))
-    set_info("matchups", bracket=bracket, lobby=LOBBY)
-    progress(f"Matchups saved: {len(matrix)} heroes, {bracket_label(bracket)}, "
-             f"lobby={LOBBY or 'any'}.")
+    set_info("matchups", bracket=bracket)
+    progress(f"Matchups saved: {len(matrix)} heroes, {bracket_label(bracket)}.")
 
 
 # ---------------------------------------------------------------- Scoring --
@@ -262,26 +260,43 @@ def synergy_score(matrix, base, c, a):
 
 
 def rank(allies, enemies, pool=None):
-    """Return (names, rows) with rows = [(total, synergy, matchup, hero_id)] best first."""
+    """Return (names, rows) with rows = [(total, syn, mat, meta, hero_id)] best first."""
     names, matrix = load()
     base = baselines(matrix)
     taken = set(allies) | set(enemies)
+
+    # Calculate pick rates from the ranked meta data for leverage
+    pick_rates = {}
+    try:
+        meta_data = _load_meta()
+        all_games = sum(v[0] for pos in meta_data.values() for v in pos.values())
+        if all_games > 0:
+            raw_picks = {}
+            for pos in meta_data.values():
+                for h, v in pos.items():
+                    raw_picks[h] = raw_picks.get(h, 0) + v[0]
+            for h, games in raw_picks.items():
+                pick_rates[h] = (games / all_games) * 100  # convert to percentage
+    except (FileNotFoundError, ValueError):
+        pass # If meta.json is missing, pick_rates is empty and leverage is 0
+
     rows = []
     for c in matrix:
         if c in taken or (pool is not None and c not in pool):
             continue
         syn = sum(synergy_score(matrix, base, c, a) for a in allies)
         mat = sum(matchup_score(matrix, base, c, e) for e in enemies)
-        rows.append((syn + mat, syn, mat, c))
+        meta = pick_rates.get(c, 0.0) * META_LEVERAGE
+        rows.append((syn + mat + meta, syn, mat, meta, c))
     rows.sort(reverse=True)
     return names, rows
 
 
 def suggest(allies, enemies, top, pool=None):
     names, rows = rank(allies, enemies, pool)
-    print(f"{'Hero':<22}{'Syn':>7}{'Mat':>7}{'Total':>8}")
-    for total, syn, mat, c in rows[:top]:
-        print(f"{names[c]:<22}{syn:>+7.1f}{mat:>+7.1f}{total:>+8.1f}")
+    print(f"{'Hero':<22}{'Syn':>7}{'Mat':>7}{'Meta':>7}{'Total':>8}")
+    for total, syn, mat, meta, c in rows[:top]:
+        print(f"{names[c]:<22}{syn:>+7.1f}{mat:>+7.1f}{meta:>+7.1f}{total:>+8.1f}")
 
 
 def resolve(text, names):
@@ -314,14 +329,15 @@ def fetch_meta(progress=print):
     bracket = load_config()["bracket"]
     ranks = ", ".join(bracket_ranks(bracket))
     CACHE.mkdir(parents=True, exist_ok=True)
-    lobby = f", lobbyType: {LOBBY}" if LOBBY else ""
+    mode = f", gameModeIds: [{GAME_MODE}]" if GAME_MODE else ""
+
     positions, all_weeks = {}, set()
     for pos in range(1, 6):
         progress(f"Position data: {pos}/5")
         q = (
             "query { heroStats { winWeek(take: %d, bracketIds: [%s], "
             "positionIds: [POSITION_%d]%s) { week heroId matchCount winCount } } }"
-            % (META_TAKE, ranks, pos, lobby)
+            % (META_TAKE, ranks, pos, mode)
         )
         rows = gql(q)["heroStats"]["winWeek"]
         if len(rows) >= META_TAKE:
@@ -337,9 +353,9 @@ def fetch_meta(progress=print):
         time.sleep(1)
     data = {"version": 2, "weeks": sorted(all_weeks), "positions": positions}
     (CACHE / "meta.json").write_text(json.dumps(data))
-    set_info("meta", bracket=bracket, weeks_available=len(all_weeks), lobby=LOBBY)
+    set_info("meta", bracket=bracket, weeks_available=len(all_weeks), game_mode=GAME_MODE)
     progress(f"Position data saved: {len(all_weeks)} weeks, "
-             f"{bracket_label(bracket)}, lobby={LOBBY or 'any'}.")
+             f"{bracket_label(bracket)}, mode={GAME_MODE or 'any'}.")
 
 
 def _games(v):
@@ -425,9 +441,9 @@ def first_pick(position, meta, top):
         sys.exit("Download the position data first: python counter_score.py fetch-meta")
     label = f"position {position}" + (" (meta only)" if meta else "") if position else "all positions"
     bracket = get_info().get("meta", {}).get("bracket", load_config()["bracket"])
-    lobby = get_info().get("meta", {}).get("lobby")
+    mode = get_info().get("meta", {}).get("game_mode", "any")
     print(f"First-pick meta, {label}, {bracket_label(bracket)}, "
-          f"lobby={lobby or 'any'}, last {current_weeks()} week(s)")
+          f"mode={mode}, last {current_weeks()} week(s)")
     print(f"{'Hero':<22}{'Win%':>7}{'Pick%':>8}{'Games':>9}")
     for h, win, pick, g in rows[:top]:
         print(f"{names[h]:<22}{win:>7.1f}{pick:>8.1f}{g:>9}")
@@ -473,7 +489,7 @@ def meta():
         print(f"  {a['name']}: {_tname(a['type'])}")
     for a in win["args"]:
         if "bracket" in a["name"].lower() or "position" in a["name"].lower() \
-                or "lobby" in a["name"].lower():
+                or "lobby" in a["name"].lower() or "gameMode" in a["name"].lower():
             enum = _tname(a["type"])
             vals = gql(
                 'query { __type(name: "%s") { enumValues { name } } }' % enum
@@ -495,7 +511,7 @@ def show_config():
     print(f"token  : {shown}  [{src}]")
     print(f"bracket: {cfg['bracket']} ({bracket_label(cfg['bracket'])})")
     print(f"weeks  : {current_weeks()}")
-    print(f"lobby  : {LOBBY or 'any'}")
+    print(f"mode   : {GAME_MODE or 'any'}")
 
 
 def main():
