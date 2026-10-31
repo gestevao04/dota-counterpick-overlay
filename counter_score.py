@@ -65,6 +65,11 @@ SHRINK_K = 200      # first-pick table: games of prior pulling win rates toward 
 MIN_SHARE_ALL = 0.004  # first-pick table with no position: ignore heroes under 0.4% of picks
 MAX_WEEKS = 12
 
+# Restrict downloaded match data to ranked games. Stratz's lobbyType enum uses
+# the bare value RANKED. Set to None to disable the filter (e.g. if matchUp
+# rejects the argument on your schema) — winWeek and matchUp both read this.
+LOBBY = "RANKED"
+
 # Individual rank names Stratz uses for winWeek; a bracket group is two of them
 # joined by "_" (LEGEND_ANCIENT -> LEGEND, ANCIENT).
 RANKS = {"UNCALIBRATED", "HERALD", "GUARDIAN", "CRUSADER", "ARCHON",
@@ -183,11 +188,15 @@ def fetch(progress=print):
     (CACHE / "heroes.json").write_text(json.dumps(names))
     ids = sorted(names)
 
+    # Optional ", lobbyType: RANKED" fragment shared by every matchUp call.
+    lobby = f", lobbyType: {LOBBY}" if LOBBY else ""
+
     matrix = {}
     for i in range(0, len(ids), BATCH):
         chunk = ids[i : i + BATCH]
         body = "".join(
-            f"h{hid}: matchUp(heroId: {hid}, bracketBasicIds: {bracket}, take: 200) "
+            f"h{hid}: matchUp(heroId: {hid}, bracketBasicIds: {bracket}"
+            f"{lobby}, take: 200) "
             "{ heroId vs { heroId2 matchCount winCount } "
             "with { heroId2 matchCount winCount } } "
             for hid in chunk
@@ -205,8 +214,9 @@ def fetch(progress=print):
         progress(f"Matchups: {min(i + BATCH, len(ids))}/{len(ids)} heroes")
         time.sleep(1)
     (CACHE / "matchups.json").write_text(json.dumps(matrix))
-    set_info("matchups", bracket=bracket)
-    progress(f"Matchups saved: {len(matrix)} heroes, {bracket_label(bracket)}.")
+    set_info("matchups", bracket=bracket, lobby=LOBBY)
+    progress(f"Matchups saved: {len(matrix)} heroes, {bracket_label(bracket)}, "
+             f"lobby={LOBBY or 'any'}.")
 
 
 # ---------------------------------------------------------------- Scoring --
@@ -304,13 +314,14 @@ def fetch_meta(progress=print):
     bracket = load_config()["bracket"]
     ranks = ", ".join(bracket_ranks(bracket))
     CACHE.mkdir(parents=True, exist_ok=True)
+    lobby = f", lobbyType: {LOBBY}" if LOBBY else ""
     positions, all_weeks = {}, set()
     for pos in range(1, 6):
         progress(f"Position data: {pos}/5")
         q = (
             "query { heroStats { winWeek(take: %d, bracketIds: [%s], "
-            "positionIds: [POSITION_%d]) { week heroId matchCount winCount } } }"
-            % (META_TAKE, ranks, pos)
+            "positionIds: [POSITION_%d]%s) { week heroId matchCount winCount } } }"
+            % (META_TAKE, ranks, pos, lobby)
         )
         rows = gql(q)["heroStats"]["winWeek"]
         if len(rows) >= META_TAKE:
@@ -326,8 +337,9 @@ def fetch_meta(progress=print):
         time.sleep(1)
     data = {"version": 2, "weeks": sorted(all_weeks), "positions": positions}
     (CACHE / "meta.json").write_text(json.dumps(data))
-    set_info("meta", bracket=bracket, weeks_available=len(all_weeks))
-    progress(f"Position data saved: {len(all_weeks)} weeks, {bracket_label(bracket)}.")
+    set_info("meta", bracket=bracket, weeks_available=len(all_weeks), lobby=LOBBY)
+    progress(f"Position data saved: {len(all_weeks)} weeks, "
+             f"{bracket_label(bracket)}, lobby={LOBBY or 'any'}.")
 
 
 def _games(v):
@@ -413,7 +425,9 @@ def first_pick(position, meta, top):
         sys.exit("Download the position data first: python counter_score.py fetch-meta")
     label = f"position {position}" + (" (meta only)" if meta else "") if position else "all positions"
     bracket = get_info().get("meta", {}).get("bracket", load_config()["bracket"])
-    print(f"First-pick meta, {label}, {bracket_label(bracket)}, last {current_weeks()} week(s)")
+    lobby = get_info().get("meta", {}).get("lobby")
+    print(f"First-pick meta, {label}, {bracket_label(bracket)}, "
+          f"lobby={lobby or 'any'}, last {current_weeks()} week(s)")
     print(f"{'Hero':<22}{'Win%':>7}{'Pick%':>8}{'Games':>9}")
     for h, win, pick, g in rows[:top]:
         print(f"{names[h]:<22}{win:>7.1f}{pick:>8.1f}{g:>9}")
@@ -458,7 +472,8 @@ def meta():
     for a in win["args"]:
         print(f"  {a['name']}: {_tname(a['type'])}")
     for a in win["args"]:
-        if "bracket" in a["name"].lower() or "position" in a["name"].lower():
+        if "bracket" in a["name"].lower() or "position" in a["name"].lower() \
+                or "lobby" in a["name"].lower():
             enum = _tname(a["type"])
             vals = gql(
                 'query { __type(name: "%s") { enumValues { name } } }' % enum
@@ -480,6 +495,7 @@ def show_config():
     print(f"token  : {shown}  [{src}]")
     print(f"bracket: {cfg['bracket']} ({bracket_label(cfg['bracket'])})")
     print(f"weeks  : {current_weeks()}")
+    print(f"lobby  : {LOBBY or 'any'}")
 
 
 def main():
