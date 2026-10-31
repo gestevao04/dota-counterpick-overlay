@@ -37,7 +37,7 @@ How the score works (all in percentage points of win rate):
   synergy(c, a)  = winrate(c with a) - average(baseline(c), baseline(a))
   meta(c)        = pick_rate_pct(c)  * META_LEVERAGE
   Each delta is shrunk toward 0 by  n / (n + K)  so small samples count less.
-  total = sum of synergies with allies + sum of matchups vs enemies + meta
+  total = (synergy sum * SYNERGY_WEIGHT) + (matchup sum * MATCHUP_WEIGHT) + meta
 """
 
 import argparse
@@ -72,6 +72,10 @@ GAME_MODE = "ALL_PICK_RANKED"
 # How much to reward heroes with high pick rates from the ranked meta.
 # E.g., a hero with a 20% pick rate gets +10.0 points to their total score.
 META_LEVERAGE = 0.5
+
+# Scoring Weights: Matchups are much more important than synergies.
+SYNERGY_WEIGHT = 1.0
+MATCHUP_WEIGHT = 3.0
 
 # Individual rank names Stratz uses for winWeek; a bracket group is two of them
 # joined by "_" (LEGEND_ANCIENT -> LEGEND, ANCIENT).
@@ -284,10 +288,14 @@ def rank(allies, enemies, pool=None):
     for c in matrix:
         if c in taken or (pool is not None and c not in pool):
             continue
+
         syn = sum(synergy_score(matrix, base, c, a) for a in allies)
         mat = sum(matchup_score(matrix, base, c, e) for e in enemies)
         meta = pick_rates.get(c, 0.0) * META_LEVERAGE
-        total = syn + mat + meta
+
+        # Apply the new weights
+        total = (syn * SYNERGY_WEIGHT) + (mat * MATCHUP_WEIGHT) + meta
+
         rows.append((total, syn, mat, c))
     rows.sort(reverse=True)
     return names, rows
