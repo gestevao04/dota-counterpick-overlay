@@ -67,7 +67,7 @@ MIN_SHARE_ALL = 0.004  # first-pick table with no position: ignore heroes under 
 MAX_WEEKS = 12
 
 # Restrict downloaded meta data to standard ranked games. Stratz's winWeek
-# accepts gameModeIds, but matchUp does NOT. So we only filter fetch-meta.
+# accepts gameModeIds, but matchUp does NOT.
 GAME_MODE = "ALL_PICK_RANKED"
 # How much to reward heroes with high pick rates from the ranked meta.
 # E.g., a hero with a 20% pick rate gets +10.0 points to their total score.
@@ -260,7 +260,7 @@ def synergy_score(matrix, base, c, a):
 
 
 def rank(allies, enemies, pool=None):
-    """Return (names, rows) with rows = [(total, syn, mat, meta, hero_id)] best first."""
+    """Return (names, rows) with rows = [(total, synergy, matchup, hero_id)] best first."""
     names, matrix = load()
     base = baselines(matrix)
     taken = set(allies) | set(enemies)
@@ -277,7 +277,7 @@ def rank(allies, enemies, pool=None):
                     raw_picks[h] = raw_picks.get(h, 0) + v[0]
             for h, games in raw_picks.items():
                 pick_rates[h] = (games / all_games) * 100  # convert to percentage
-    except (FileNotFoundError, ValueError):
+    except (FileNotFoundError, ValueError, KeyError):
         pass # If meta.json is missing, pick_rates is empty and leverage is 0
 
     rows = []
@@ -287,7 +287,8 @@ def rank(allies, enemies, pool=None):
         syn = sum(synergy_score(matrix, base, c, a) for a in allies)
         mat = sum(matchup_score(matrix, base, c, e) for e in enemies)
         meta = pick_rates.get(c, 0.0) * META_LEVERAGE
-        rows.append((syn + mat + meta, syn, mat, meta, c))
+        total = syn + mat + meta
+        rows.append((total, syn, mat, c))
     rows.sort(reverse=True)
     return names, rows
 
@@ -295,7 +296,7 @@ def rank(allies, enemies, pool=None):
 def suggest(allies, enemies, top, pool=None):
     names, rows = rank(allies, enemies, pool)
     print(f"{'Hero':<22}{'Syn':>7}{'Mat':>7}{'Total':>8}")
-    for total, syn, mat, meta, c in rows[:top]:
+    for total, syn, mat, c in rows[:top]:
         print(f"{names[c]:<22}{syn:>+7.1f}{mat:>+7.1f}{total:>+8.1f}")
 
 
@@ -353,9 +354,8 @@ def fetch_meta(progress=print):
         time.sleep(1)
     data = {"version": 2, "weeks": sorted(all_weeks), "positions": positions}
     (CACHE / "meta.json").write_text(json.dumps(data))
-    set_info("meta", bracket=bracket, weeks_available=len(all_weeks), game_mode=GAME_MODE)
-    progress(f"Position data saved: {len(all_weeks)} weeks, "
-             f"{bracket_label(bracket)}, mode={GAME_MODE or 'any'}.")
+    set_info("meta", bracket=bracket, weeks_available=len(all_weeks))
+    progress(f"Position data saved: {len(all_weeks)} weeks, {bracket_label(bracket)}.")
 
 
 def _games(v):
