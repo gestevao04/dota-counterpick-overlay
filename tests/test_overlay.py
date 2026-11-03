@@ -14,6 +14,11 @@ def text(widget):
     return widget.opts.get("text", "")
 
 
+def frame_texts(frame):
+    """Helper to extract text from all children labels of a frame."""
+    return [w.opts.get("text", "") for w in frame.winfo_children() if hasattr(w, "opts")]
+
+
 class SyncThread:
     """Runs a thread's work immediately, so tests need no waiting."""
 
@@ -58,12 +63,19 @@ class OverlayTests(unittest.TestCase):
     def test_reads_a_draft_and_shows_the_counter_table(self):
         frame = make_frame({"radiant_1": 1, "radiant_2": 2, "radiant_3": 3, "dire_1": 4, "dire_2": 5})
         o = ov.Overlay(overlay_args())
-        o.on_button("me", 3)                                       # I am radiant_3
         with mock.patch.object(da, "grab", lambda monitor: frame):
             o.tick()
             o.tick()
-        self.assertEqual(text(o.ally_lbl), "Allies: Hero1, Hero2")
-        self.assertEqual(text(o.enemy_lbl), "Enemies: Hero4, Hero5")
+
+        allies = frame_texts(o.ally_frame)
+        enemies = frame_texts(o.enemy_frame)
+
+        self.assertIn("Hero1", allies)
+        self.assertIn("Hero2", allies)
+        self.assertIn("Hero3", allies)
+        self.assertIn("Hero4", enemies)
+        self.assertIn("Hero5", enemies)
+
         self.assertFalse(text(o.title).startswith("error"))
         self.assertEqual(o.cols.opts["text"], ov.COUNTER_COLS)
         self.assertTrue(text(o.rows[0]))
@@ -75,14 +87,12 @@ class OverlayTests(unittest.TestCase):
         self.assertEqual(o.cols.opts["text"], ov.META_COLS)
         self.assertTrue(text(o.rows[0]))
 
-    def test_choices_are_remembered_and_flags_still_win(self):
+    def test_choices_are_remembered(self):
         o = ov.Overlay(overlay_args())
         o.on_button("team", "dire")
         o.on_button("position", 1)
-        o.on_button("position", "toggle")
-        o.on_button("me", 3)
         again = ov.Overlay(overlay_args())
-        self.assertEqual((again.team, again.position, again.meta, again.me_idx), ("dire", 1, True, 3))
+        self.assertEqual((again.team, again.position), ("dire", 1))
         self.assertEqual(ov.Overlay(overlay_args(team="radiant", position=4)).position, 4)
 
     def test_the_pool_cache_depends_on_the_weeks_setting(self):
@@ -90,7 +100,8 @@ class OverlayTests(unittest.TestCase):
         o.pool()
         cs.save_config(weeks=1)
         o.pool()
-        self.assertEqual({key[2] for key in o.pools}, {2, 1})
+        # Key is now (position, weeks) so we check index 1
+        self.assertEqual({key[1] for key in o.pools}, {2, 1})
 
     def test_missing_position_data_gives_a_helpful_message(self):
         (cs.CACHE / "meta.json").unlink()

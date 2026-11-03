@@ -19,9 +19,14 @@ HEROES = list(range(1, 9))          # hero ids 1..8, names Hero1..Hero8
 class Widget:
     """Records config() calls so tests can read what a label shows."""
 
-    def __init__(self, *a, **kw):
+    def __init__(self, master=None, *a, **kw):
+        self.master = master
         self.opts = {k: v for k, v in kw.items() if k != "textvariable"}
         self.afters, self.destroyed = [], False
+        self.children = []
+        # If this widget is attached to a parent frame, record it
+        if self.master is not None and hasattr(self.master, "children"):
+            self.master.children.append(self)
 
     def config(self, **kw):
         self.opts.update(kw)
@@ -40,8 +45,14 @@ class Widget:
     def winfo_y(self):
         return 0
 
+    def winfo_children(self):
+        return self.children
+
     def destroy(self):
         self.destroyed = True
+        if self.master is not None and hasattr(self.master, "children"):
+            if self in self.master.children:
+                self.master.children.remove(self)
 
     def __getattr__(self, name):        # pack, grid, bind, attributes, ...
         return lambda *a, **k: None
@@ -63,6 +74,7 @@ def install_fake_tk():
     for name in ("Tk", "Toplevel", "Label", "Frame", "Entry", "Button", "Spinbox", "Text"):
         setattr(tk, name, Widget)
     tk.StringVar = Var
+    tk.BooleanVar = Var
     tk.Tcl = lambda: SimpleNamespace(eval=lambda script: "9.0")
     tk.ttk = SimpleNamespace(Combobox=Widget, Separator=Widget, Progressbar=Widget)
     sys.modules["tkinter"] = tk

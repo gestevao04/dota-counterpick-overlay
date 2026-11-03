@@ -45,7 +45,6 @@ Developer options:
   --preview        write preview.jpg each second
   --debug          print every slot's best guess, score and margin each second
 """
-
 import argparse
 import os
 import queue
@@ -68,7 +67,6 @@ GOOD, BAD, WARN = "#58d68d", "#ec7063", "#e5a50a"
 BTN, BTN_ON = "#1c2430", "#2e86c1"
 FONT = ("Consolas", 12)
 
-# Adjusted strings for perfect alignment
 COUNTER_COLS = f"{'Hero':<16}{'Syn':>6}{'Mat':>7}{'Tot':>7}"
 META_COLS = f"{'Hero':<16}{'Win%':>7}{'Pick%':>7}"
 
@@ -76,9 +74,7 @@ STATE_COLOUR = {"ok": "#1e8449", "stale": "#b9770e", "missing": "#c0392b"}
 
 
 def _user32():
-    """user32 with explicit types (needed for 64-bit window handles)."""
     import ctypes
-
     u = ctypes.windll.user32
     u.GetParent.argtypes = [ctypes.c_void_p]
     u.GetParent.restype = ctypes.c_void_p
@@ -91,7 +87,6 @@ def _user32():
 
 
 def format_rows(names, rows, top):
-    """Pure helper: [(text, colour)] for the ranked suggestions."""
     out = []
     for total, syn, mat, hid in rows[:top]:
         text = f"{names[hid][:16]:<16}{syn:>+6.1f}{mat:>+7.1f}{total:>+7.1f}"
@@ -100,7 +95,6 @@ def format_rows(names, rows, top):
 
 
 def format_meta_rows(names, rows, top):
-    """First-pick table rows: win% coloured against the 50% line."""
     out = []
     for hid, win, pick, _games in rows[:top]:
         colour = GOOD if win >= 51 else BAD if win < 49 else FG
@@ -114,7 +108,6 @@ def header_text(n_read, n_total, team, position):
 
 
 def footer_text():
-    """(text, colour) describing which data the overlay is using."""
     if not updater.is_ready():
         return "No data yet. Open Settings to download it.", WARN
     info, cfg = cs.get_info(), cs.load_config()
@@ -129,9 +122,6 @@ def footer_text():
 
 
 class SettingsWindow:
-    """Token, bracket, weeks and data downloads. A normal window (not the
-    no-focus overlay style) so the token field can take keyboard input."""
-
     def __init__(self, overlay):
         import tkinter as tk
         from tkinter import ttk
@@ -148,7 +138,6 @@ class SettingsWindow:
         win.protocol("WM_DELETE_WINDOW", self.close)
         pad = {"padx": 8, "pady": 3}
 
-        # --- Stratz token ---
         tk.Label(win, text="Stratz API token").grid(row=0, column=0, sticky="w", **pad)
         self.token_var = tk.StringVar(value=cfg.get("token", ""))
         tk.Entry(win, textvariable=self.token_var, show="*", width=46).grid(
@@ -162,7 +151,6 @@ class SettingsWindow:
                 else "Saved in config.json next to the program. Keep that file private.")
         tk.Label(win, text=note, fg=DIM).grid(row=2, column=1, columnspan=2, sticky="w", padx=8)
 
-        # --- bracket and weeks ---
         tk.Label(win, text="Bracket").grid(row=3, column=0, sticky="w", **pad)
         self.bracket_map = {}
         self.bracket_var = tk.StringVar()
@@ -183,7 +171,6 @@ class SettingsWindow:
         self.save_btn = tk.Button(win, text="Save settings", command=self.save)
         self.save_btn.grid(row=7, column=1, sticky="w", **pad)
 
-        # --- data ---
         ttk.Separator(win).grid(row=8, column=0, columnspan=3, sticky="we", pady=6)
         self.status_labels, self.task_buttons = {}, {}
         for i, task in enumerate(updater.TASKS):
@@ -385,7 +372,6 @@ class Overlay:
         self.load_data()
 
     def show_help(self):
-        """Popup explaining the lane toggles."""
         if self.help_window is not None and self.help_window.winfo_exists():
             self.help_window.lift()
             return
@@ -396,7 +382,6 @@ class Overlay:
         win.resizable(False, False)
         win.configure(bg=BG)
 
-        # Position it relative to the overlay
         x = self.root.winfo_x() + 20
         y = self.root.winfo_y() + 200
         win.geometry(f"+{x}+{y}")
@@ -427,8 +412,6 @@ class Overlay:
 
         btn = self.tk.Button(bottom, text="Got it", command=close_help)
         btn.pack(side="right")
-
-        # If the user clicks the X on the window border
         win.protocol("WM_DELETE_WINDOW", close_help)
 
     def load_data(self):
@@ -576,7 +559,7 @@ class Overlay:
     def render_first_pick(self):
         self.cols.config(text=META_COLS)
         try:
-            rows = cs.meta_table(self.position, meta=False)
+            rows = cs.meta_table(self.position)
         except (FileNotFoundError, ValueError, KeyError):
             self.title.config(text="Download position data in Settings", fg=BAD)
             self.set_rows([])
@@ -665,7 +648,6 @@ class Overlay:
         if not self.ready or not cs.get_token():
             self.root.after(700, self.open_settings)
         elif not cs.load_config().get("dismissed_lane_help", False):
-            # Show the new feature tutorial
             self.root.after(1000, self.show_help)
 
         self.root.mainloop()
