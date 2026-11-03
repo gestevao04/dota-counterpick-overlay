@@ -11,23 +11,24 @@ terminal commands are needed.
 In the overlay:
   Team      which side you are on (radiant / dire)
   Pos       only suggest heroes played in that position (All = no filter)
-  Meta      with a position: only the most played heroes there
-  Me        your own slot (1-5, counted left to right on your side), so you
-            are not counted as your own teammate; "-" = none
   Settings  token, bracket, weeks of meta data, and downloading data
+
+Click an enemy hero's name to mark them as a Lane opponent (up to 2).
+Click an ally hero's name to mark them as your Lane partner (up to 1).
+Toggled heroes have their matchup/synergy weights multiplied.
 
 With nothing picked yet (you are first pick) it shows the first-pick meta:
 win% and pick% per hero for the selected position (all positions if "All").
 Columns otherwise: Syn = synergy with your allies, Mat = matchup vs the
 enemies, Tot = total, in percentage points of win rate.
 
-Your choices (team, position, Meta, Me) are remembered between runs.
+Your choices (team, position) are remembered between runs.
 Drag the window by its background; right-click anywhere on it to quit.
 The overlay re-asserts "always on top" four times a second and does not take
 focus when clicked. It cannot draw over true exclusive fullscreen.
 
 Options (starting values; the buttons override them):
-  --team SIDE  --position N  --meta  --me N
+  --team SIDE  --position N
   --top N          rows to show (default 8)
   --monitor N      monitor to capture (default 1)   --interval S  (default 1.0)
   --pos X,Y        where the window starts, in screen pixels (default 20,160)
@@ -66,8 +67,11 @@ BG, FG, DIM = "#10141c", "#e8e8e8", "#7f8c8d"
 GOOD, BAD, WARN = "#58d68d", "#ec7063", "#e5a50a"
 BTN, BTN_ON = "#1c2430", "#2e86c1"
 FONT = ("Consolas", 12)
-COUNTER_COLS = f"{'Hero':<16}{'Syn':>5}{'Mat':>6}{'Tot':>6}"
-META_COLS = f"{'Hero':<16}{'Win%':>6}{'Pick%':>6}"
+
+# Adjusted strings for perfect alignment
+COUNTER_COLS = f"{'Hero':<16}{'Syn':>6}{'Mat':>7}{'Tot':>7}"
+META_COLS = f"{'Hero':<16}{'Win%':>7}{'Pick%':>7}"
+
 STATE_COLOUR = {"ok": "#1e8449", "stale": "#b9770e", "missing": "#c0392b"}
 
 
@@ -90,7 +94,7 @@ def format_rows(names, rows, top):
     """Pure helper: [(text, colour)] for the ranked suggestions."""
     out = []
     for total, syn, mat, hid in rows[:top]:
-        text = f"{names[hid][:16]:<16}{syn:>+5.1f}{mat:>+6.1f}{total:>+6.1f}"
+        text = f"{names[hid][:16]:<16}{syn:>+6.1f}{mat:>+7.1f}{total:>+7.1f}"
         out.append((text, GOOD if total > 0 else BAD if total < 0 else FG))
     return out
 
@@ -100,23 +104,13 @@ def format_meta_rows(names, rows, top):
     out = []
     for hid, win, pick, _games in rows[:top]:
         colour = GOOD if win >= 51 else BAD if win < 49 else FG
-        out.append((f"{names[hid][:16]:<16}{win:>6.1f}{pick:>6.1f}", colour))
+        out.append((f"{names[hid][:16]:<16}{win:>7.1f}{pick:>7.1f}", colour))
     return out
 
 
-def header_text(n_read, n_total, team, position, meta):
-    mode = (f"pos {position}" + (" meta" if meta else "")) if position else "all heroes"
+def header_text(n_read, n_total, team, position):
+    mode = f"pos {position}" if position else "all heroes"
     return f"{team.title()} | read {n_read}/{n_total} | {mode}"
-
-
-def parse_me(me):
-    """'3' or 'radiant_3' -> 3; None -> None."""
-    if me is None:
-        return None
-    try:
-        return int(str(me).split("_")[-1])
-    except ValueError:
-        return None
 
 
 def footer_text():
@@ -211,13 +205,12 @@ class SettingsWindow:
         self.refresh_status()
         self.ov.root.after(100, self.poll)
         win.after(150, win.focus_force)
-        if cs.get_token():                       # ask Stratz which brackets it offers
+        if cs.get_token():
             threading.Thread(target=self._load_brackets, daemon=True).start()
 
-    # ---- helpers --------------------------------------------------------
     def set_brackets(self, enums, current):
         self.bracket_map = {cs.bracket_label(e): e for e in enums}
-        if current not in enums:                  # keep the saved choice selectable
+        if current not in enums:
             self.bracket_map[cs.bracket_label(current)] = current
         self.bracket_box.config(values=list(self.bracket_map))
         self.bracket_var.set(cs.bracket_label(current))
@@ -249,9 +242,7 @@ class SettingsWindow:
         else:
             self.progress.stop()
 
-    # ---- actions --------------------------------------------------------
     def save(self):
-        """Write the settings that are on screen to config.json."""
         cfg = cs.load_config()
         bracket = self.bracket_map.get(self.bracket_var.get(), cfg["bracket"])
         try:
@@ -261,7 +252,7 @@ class SettingsWindow:
         self.weeks_var.set(str(weeks))
         token_changed = self.token_var.get().strip() != cfg.get("token", "")
         cs.save_config(token=self.token_var.get().strip(), bracket=bracket, weeks=weeks)
-        self.ov.pools.clear()                     # the weeks setting changes the pools
+        self.ov.pools.clear()
         self.refresh_status()
         self.ov.update_footer()
         self.ov.refresh()
@@ -282,7 +273,6 @@ class SettingsWindow:
         threading.Thread(target=work, daemon=True).start()
 
     def poll(self):
-        """Runs on the GUI thread; worker threads only talk to us through the queue."""
         try:
             while True:
                 kind, payload = self.q.get_nowait()
@@ -320,23 +310,25 @@ class SettingsWindow:
 
 class Overlay:
     def __init__(self, args):
-        import tkinter as tk  # imported here so the helpers above need no GUI
+        import tkinter as tk
+        self.tk = tk
 
         self.args = args
         cfg = cs.load_config()
         self.team = args.team or cfg.get("team") or "radiant"
         self.position = args.position if args.position is not None else cfg.get("position")
-        self.meta = bool(args.meta or cfg.get("meta"))
-        self.me_idx = parse_me(args.me) if args.me else parse_me(cfg.get("me"))
         self.pools, self.buttons = {}, {}
         self.last_picks, self.last_img = {}, None
+        self.lane_enemies = set()
+        self.lane_ally = None
         self.memory = da.SlotMemory()
         self.prev_key = self.shown_key = None
         self.names, self.templates, self.ready = {}, None, False
         self.settings = None
+        self.help_window = None
 
         root = self.root = tk.Tk()
-        root.overrideredirect(True)            # no title bar
+        root.overrideredirect(True)
         root.attributes("-topmost", True)
         root.attributes("-alpha", args.alpha)
         root.configure(bg=BG)
@@ -352,7 +344,6 @@ class Overlay:
 
         self.title = label("Waiting for draft...", ("Consolas", 11, "bold"), pady=4)
 
-        # --- control rows (clickable) ---
         def row(name, key, options, extra=None):
             frame = tk.Frame(root, bg=BG)
             frame.pack(fill="x", padx=8, pady=1)
@@ -371,14 +362,18 @@ class Overlay:
         if args.dev:
             team_extra.append(("snap", "Snap"))
         row("Team", "team", [("radiant", "Radiant"), ("dire", "Dire")], extra=team_extra)
-        row("Pos", "position", [(None, "All")] + [(i, str(i)) for i in range(1, 6)],
-            extra=[("toggle", "Meta")])
-        row("Me", "me", [(None, "-")] + [(i, str(i)) for i in range(1, 6)])
+        row("Pos", "position", [(None, "All")] + [(i, str(i)) for i in range(1, 6)])
         self.style_buttons()
 
-        self.ally_lbl = label("Allies: -", wraplength=330)
-        self.enemy_lbl = label("Enemies: -", wraplength=330)
-        self.cols = label(COUNTER_COLS)
+        self.ally_frame = tk.Frame(root, bg=BG)
+        self.ally_frame.pack(fill="x", padx=8, pady=1)
+        draggable.append(self.ally_frame)
+
+        self.enemy_frame = tk.Frame(root, bg=BG)
+        self.enemy_frame.pack(fill="x", padx=8, pady=1)
+        draggable.append(self.enemy_frame)
+
+        self.cols = label(COUNTER_COLS, FONT, fg=DIM)
         self.rows = [label("", FONT, FG) for _ in range(args.top)]
         self.footer = label("", ("Consolas", 9), DIM, pady=3)
 
@@ -389,9 +384,54 @@ class Overlay:
 
         self.load_data()
 
-    # ---- data -----------------------------------------------------------
+    def show_help(self):
+        """Popup explaining the lane toggles."""
+        if self.help_window is not None and self.help_window.winfo_exists():
+            self.help_window.lift()
+            return
+
+        win = self.help_window = self.tk.Toplevel(self.root)
+        win.title("New Feature: Lane Matchups")
+        win.attributes("-topmost", True)
+        win.resizable(False, False)
+        win.configure(bg=BG)
+
+        # Position it relative to the overlay
+        x = self.root.winfo_x() + 20
+        y = self.root.winfo_y() + 200
+        win.geometry(f"+{x}+{y}")
+
+        msg = (
+            "You can now focus the suggestions on your specific lane!\n\n"
+            "• Click an ENEMY hero to mark them as a Lane Opponent (up to 2).\n"
+            "• Click an ALLY hero to mark them as your Lane Partner (up to 1).\n\n"
+            "Their matchup and synergy scores will be multiplied by 2.5x,\n"
+            "heavily prioritizing heroes that win that specific matchup."
+        )
+        self.tk.Label(win, text=msg, font=("Consolas", 10), fg=FG, bg=BG,
+                      justify="left", padx=15, pady=15).pack(fill="both", expand=True)
+
+        bottom = self.tk.Frame(win, bg=BG)
+        bottom.pack(fill="x", padx=10, pady=10)
+
+        dont_show_var = self.tk.BooleanVar(master=win, value=False)
+        chk = self.tk.Checkbutton(bottom, text="Don't show this again", variable=dont_show_var,
+                                  font=("Consolas", 9), fg=DIM, bg=BG,
+                                  selectcolor=BG, activebackground=BG, activeforeground=FG)
+        chk.pack(side="left")
+
+        def close_help():
+            if dont_show_var.get():
+                cs.save_config(dismissed_lane_help=True)
+            win.destroy()
+
+        btn = self.tk.Button(bottom, text="Got it", command=close_help)
+        btn.pack(side="right")
+
+        # If the user clicks the X on the window border
+        win.protocol("WM_DELETE_WINDOW", close_help)
+
     def load_data(self):
-        """(Re)load hero names and portraits. True when drafts can be scored."""
         self.pools.clear()
         try:
             self.names, _ = cs.load()
@@ -413,18 +453,28 @@ class Overlay:
             return
         self.settings = SettingsWindow(self)
 
-    # ---- dragging -------------------------------------------------------
     def _start_drag(self, e):
         self._dx, self._dy = e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y()
 
     def _drag(self, e):
         self.root.geometry(f"+{e.x_root - self._dx}+{e.y_root - self._dy}")
 
-    # ---- state ----------------------------------------------------------
+    def toggle_lane_ally(self, hid):
+        if self.lane_ally == hid:
+            self.lane_ally = None
+        else:
+            self.lane_ally = hid
+        self.refresh()
+
+    def toggle_lane_enemy(self, hid):
+        if hid in self.lane_enemies:
+            self.lane_enemies.remove(hid)
+        elif len(self.lane_enemies) < 2:
+            self.lane_enemies.add(hid)
+        self.refresh()
+
     def on_button(self, key, value):
-        if value == "toggle":
-            self.meta = not self.meta
-        elif value == "settings":
+        if value == "settings":
             self.open_settings()
             return
         elif value == "snap":
@@ -434,55 +484,42 @@ class Overlay:
             self.team = value
         elif key == "position":
             self.position = value
-        elif key == "me":
-            self.me_idx = value
+
+        self.lane_enemies.clear()
+        self.lane_ally = None
+
         self.style_buttons()
         self.save_prefs()
         self.refresh()
 
-    def choose(self, key, value):
-        self.on_button(key, value)
-
-    def toggle_meta(self):
-        self.on_button("position", "toggle")
-
     def save_prefs(self):
         try:
-            cs.save_config(team=self.team, position=self.position,
-                           meta=self.meta, me=self.me_idx)
+            cs.save_config(team=self.team, position=self.position)
         except OSError:
             pass
 
     def style_buttons(self):
-        selected = {("team", self.team), ("position", self.position), ("me", self.me_idx)}
+        selected = {("team", self.team), ("position", self.position)}
         for (key, value), b in self.buttons.items():
             if value in ("settings", "snap"):
                 continue
-            on = self.meta if value == "toggle" else (key, value) in selected
-            b.config(bg=BTN_ON if on else BTN)
-
-    def me_slot(self):
-        if self.me_idx is None:
-            return None
-        sided = any(k.split("_")[0] in ("radiant", "dire") for k in dr.SLOTS)
-        return f"{self.team}_{self.me_idx}" if sided else f"ally_{self.me_idx}"
+            b.config(bg=BTN_ON if (key, value) in selected else BTN)
 
     def pool(self):
         if not self.position:
             return None
-        key = (self.position, self.meta, cs.current_weeks())
+        key = (self.position, cs.current_weeks())
         if key not in self.pools:
-            self.pools[key] = cs.meta_pool(self.position, cs.META_TOP if self.meta else None)
+            self.pools[key] = cs.meta_pool(self.position)
         return self.pools[key]
 
     def split(self, picks):
-        return da.split_picks(picks, self.me_slot(), self.team)
+        return da.split_picks(picks, None, self.team)
 
     def key_of(self, picks):
         allies, enemies = self.split(picks)
         return (tuple(sorted(allies)), tuple(sorted(enemies)))
 
-    # ---- drawing --------------------------------------------------------
     def set_rows(self, items):
         for i, lbl in enumerate(self.rows):
             text, colour = items[i] if i < len(items) else ("", FG)
@@ -494,52 +531,72 @@ class Overlay:
             self.set_rows([])
             return
         allies, enemies = self.split(picks)
-        self.ally_lbl.config(text="Allies: " + (", ".join(self.names[h] for h in allies) or "-"))
-        self.enemy_lbl.config(text="Enemies: " + (", ".join(self.names[h] for h in enemies) or "-"))
+
+        for w in self.ally_frame.winfo_children():
+            w.destroy()
+        self.tk.Label(self.ally_frame, text="Allies: ", font=("Consolas", 10), fg=DIM, bg=BG).pack(side="left")
+        if not allies:
+            self.tk.Label(self.ally_frame, text="-", font=("Consolas", 10), fg=DIM, bg=BG).pack(side="left")
+        for h in allies:
+            is_lane = h == self.lane_ally
+            lbl = self.tk.Label(self.ally_frame, text=self.names[h], font=("Consolas", 10),
+                                fg=WARN if is_lane else FG, bg=BTN_ON if is_lane else BTN,
+                                padx=4, cursor="hand2")
+            lbl.pack(side="left", padx=2)
+            lbl.bind("<ButtonPress-1>", lambda e, hid=h: self.toggle_lane_ally(hid))
+
+        for w in self.enemy_frame.winfo_children():
+            w.destroy()
+        self.tk.Label(self.enemy_frame, text="Enemies:", font=("Consolas", 10), fg=DIM, bg=BG).pack(side="left")
+        if not enemies:
+            self.tk.Label(self.enemy_frame, text="-", font=("Consolas", 10), fg=DIM, bg=BG).pack(side="left")
+        for h in enemies:
+            is_lane = h in self.lane_enemies
+            lbl = self.tk.Label(self.enemy_frame, text=self.names[h], font=("Consolas", 10),
+                                fg=WARN if is_lane else FG, bg=BTN_ON if is_lane else BTN,
+                                padx=4, cursor="hand2")
+            lbl.pack(side="left", padx=2)
+            lbl.bind("<ButtonPress-1>", lambda e, hid=h: self.toggle_lane_enemy(hid))
+
         if not allies and not enemies:
             self.render_first_pick()
             return
+
         self.cols.config(text=COUNTER_COLS)
         try:
-            names, ranked = cs.rank(allies, enemies, self.pool())
+            names, ranked = cs.rank(allies, enemies, self.pool(), lane_enemies=self.lane_enemies, lane_ally=self.lane_ally)
         except (FileNotFoundError, ValueError, KeyError):
             self.title.config(text="Download position data in Settings", fg=BAD)
             self.set_rows([])
             return
-        n_read = len(allies) + len(enemies) + (1 if self.me_slot() in picks else 0)
-        self.title.config(text=header_text(n_read, len(dr.SLOTS), self.team,
-                                           self.position, self.meta), fg=FG)
+        n_read = len(allies) + len(enemies)
+        self.title.config(text=header_text(n_read, len(dr.SLOTS), self.team, self.position), fg=FG)
         self.set_rows(format_rows(names, ranked, self.args.top))
 
     def render_first_pick(self):
-        """No picks on screen yet: show the meta win% for the chosen position."""
         self.cols.config(text=META_COLS)
         try:
-            rows = cs.meta_table(self.position, self.meta)
+            rows = cs.meta_table(self.position, meta=False)
         except (FileNotFoundError, ValueError, KeyError):
             self.title.config(text="Download position data in Settings", fg=BAD)
             self.set_rows([])
             return
-        mode = (f"pos {self.position}" + (" meta" if self.meta else "")) if self.position else "all positions"
+        mode = f"pos {self.position}" if self.position else "all positions"
         self.title.config(text=f"No picks yet | meta win% | {mode}", fg=FG)
         self.set_rows(format_meta_rows(self.names, rows, self.args.top))
 
     def refresh(self):
-        """Redraw immediately after a click or a settings change, using the latest read."""
         self.render(self.last_picks)
         self.shown_key = self.key_of(self.last_picks)
 
-    # ---- developer tools ------------------------------------------------
     def snap(self):
-        """Save what the script sees right now (preview.jpg, snapshot.png,
-        snapshot.txt) in the program's data folder, wherever it was started from."""
         if self.last_img is None or self.templates is None:
             self.title.config(text="Nothing captured yet", fg=BAD)
             return
         out = cs.DATA_DIR
         try:
             da.save_preview(self.last_img, str(out / "preview.jpg"))
-            cv2.imwrite(str(out / "snapshot.png"), self.last_img)  # clean frame, for `learn`
+            cv2.imwrite(str(out / "snapshot.png"), self.last_img)
             (out / "snapshot.txt").write_text(
                 "\n".join(da.debug_lines(self.last_img, self.templates, self.names)))
         except OSError as exc:
@@ -547,42 +604,34 @@ class Overlay:
             return
         self.title.config(text="Saved snapshot files in the program folder", fg=GOOD)
 
-    # ---- staying above the game (Windows) -------------------------------
     def _hwnd(self, u):
         child = self.root.winfo_id()
         return u.GetParent(child) or child
 
     def setup_window_style(self):
-        """Don't take focus from the game when clicked; hide from the taskbar."""
         if sys.platform != "win32":
             return
         try:
             u = _user32()
             hwnd = self._hwnd(u)
-            style = u.GetWindowLongW(hwnd, -20)                      # GWL_EXSTYLE
-            u.SetWindowLongW(hwnd, -20, style | 0x08000080)          # NOACTIVATE | TOOLWINDOW
-            # NOMOVE | NOSIZE | NOZORDER | NOACTIVATE | FRAMECHANGED
+            style = u.GetWindowLongW(hwnd, -20)
+            u.SetWindowLongW(hwnd, -20, style | 0x08000080)
             u.SetWindowPos(hwnd, None, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020)
         except Exception:
             pass
 
     def keep_on_top(self):
-        """Re-claim the top-most layer. A game that is also top-most would
-        otherwise cover us as soon as it is clicked."""
         try:
             self.root.attributes("-topmost", True)
             if sys.platform == "win32":
                 import ctypes
-
                 u = _user32()
-                # HWND_TOPMOST; NOMOVE | NOSIZE | NOACTIVATE | SHOWWINDOW
                 u.SetWindowPos(self._hwnd(u), ctypes.c_void_p(-1), 0, 0, 0, 0,
                                0x0001 | 0x0002 | 0x0010 | 0x0040)
         except Exception:
             pass
         self.root.after(250, self.keep_on_top)
 
-    # ---- main loop ------------------------------------------------------
     def tick(self):
         a = self.args
         try:
@@ -598,12 +647,11 @@ class Overlay:
                 picks = self.memory.update(da.read_draft(img, self.templates))
                 self.last_picks = picks
                 key = self.key_of(picks)
-                # act only when two consecutive reads agree (ignores transitions)
                 if key == self.prev_key and key != self.shown_key:
                     self.shown_key = key
                     self.render(picks)
                 self.prev_key = key
-        except Exception as exc:  # keep the overlay alive, show the problem
+        except Exception as exc:
             self.title.config(text=f"error: {exc}"[:48], fg=BAD)
         self.root.after(int(a.interval * 1000), self.tick)
 
@@ -613,8 +661,13 @@ class Overlay:
             self.setup_window_style()
         self.root.after(250, self.keep_on_top)
         self.root.after(300, self.tick)
+
         if not self.ready or not cs.get_token():
-            self.root.after(700, self.open_settings)      # first run: set everything up
+            self.root.after(700, self.open_settings)
+        elif not cs.load_config().get("dismissed_lane_help", False):
+            # Show the new feature tutorial
+            self.root.after(1000, self.show_help)
+
         self.root.mainloop()
 
 
@@ -622,9 +675,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument("--version", action="version", version=f"Dota Draft Overlay {__version__}")
     p.add_argument("--position", type=int, choices=range(1, 6))
-    p.add_argument("--meta", action="store_true")
     p.add_argument("--team", choices=["radiant", "dire"], default=None)
-    p.add_argument("--me", default=None)
     p.add_argument("--top", type=int, default=8)
     p.add_argument("--monitor", type=int, default=1)
     p.add_argument("--interval", type=float, default=1.0)
@@ -647,7 +698,6 @@ def main():
     if da.use_slots_file():
         print(f"Using {da.SLOTS_FILE} for slot boxes")
 
-    # keep window and capture coordinates in real pixels on scaled Windows displays
     try:
         import ctypes
         ctypes.windll.shcore.SetProcessDpiAwareness(2)

@@ -76,6 +76,8 @@ META_LEVERAGE = 0.5
 # Scoring Weights: Matchups are much more important than synergies.
 SYNERGY_WEIGHT = 1.0
 MATCHUP_WEIGHT = 3.0
+LANE_WEIGHT_MULTIPLIER = 2.5 # NEW: How much to multiply matchup score for lane enemies
+LANE_ALLY_MULTIPLIER = 2.5        # Multiplier for the ally toggled as your lane partner
 
 # Individual rank names Stratz uses for winWeek; a bracket group is two of them
 # joined by "_" (LEGEND_ANCIENT -> LEGEND, ANCIENT).
@@ -87,6 +89,7 @@ DEFAULT_CONFIG = {
     "token": "", "bracket": "LEGEND_ANCIENT", "weeks": 2,
     # overlay choices, remembered between runs
     "team": "radiant", "position": None, "meta": False, "me": None,
+    "dismissed_lane_help": False, # NEW: tracks if the user closed the tutorial popup
 }
 
 
@@ -263,11 +266,12 @@ def synergy_score(matrix, base, c, a):
     return shrink(w / n - expected, n) * 100
 
 
-def rank(allies, enemies, pool=None):
+def rank(allies, enemies, pool=None, lane_enemies=None, lane_ally=None):
     """Return (names, rows) with rows = [(total, synergy, matchup, hero_id)] best first."""
     names, matrix = load()
     base = baselines(matrix)
     taken = set(allies) | set(enemies)
+    lane_enemies = lane_enemies or set()
 
     # Calculate pick rates from the ranked meta data for leverage
     pick_rates = {}
@@ -280,20 +284,33 @@ def rank(allies, enemies, pool=None):
                 for h, v in pos.items():
                     raw_picks[h] = raw_picks.get(h, 0) + v[0]
             for h, games in raw_picks.items():
-                pick_rates[h] = (games / all_games) * 100  # convert to percentage
+                pick_rates[h] = (games / all_games) * 100
     except (FileNotFoundError, ValueError, KeyError):
-        pass # If meta.json is missing, pick_rates is empty and leverage is 0
+        pass
 
     rows = []
     for c in matrix:
         if c in taken or (pool is not None and c not in pool):
             continue
 
-        syn = sum(synergy_score(matrix, base, c, a) for a in allies)
-        mat = sum(matchup_score(matrix, base, c, e) for e in enemies)
+        # Calculate synergy, applying the lane ally multiplier if needed
+        syn = 0.0
+        for a in allies:
+            score = synergy_score(matrix, base, c, a)
+            if a == lane_ally:
+                score *= LANE_ALLY_MULTIPLIER
+            syn += score
+
+        # Calculate matchup score, applying the lane enemy multiplier if needed
+        mat = 0.0
+        for e in enemies:
+            score = matchup_score(matrix, base, c, e)
+            if e in lane_enemies:
+                score *= LANE_WEIGHT_MULTIPLIER
+            mat += score
+            
         meta = pick_rates.get(c, 0.0) * META_LEVERAGE
 
-        # Apply the new weights
         total = (syn * SYNERGY_WEIGHT) + (mat * MATCHUP_WEIGHT) + meta
 
         rows.append((total, syn, mat, c))
